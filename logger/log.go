@@ -120,6 +120,10 @@ func Panic(args ...interface{}) {
 	logger.Panic(args...)
 }
 
+func Panicf(str string, args ...interface{}) {
+	logger.Panicf(str, args...)
+}
+
 func NewLog(fileName string, out bool) *logrus.Logger {
 	ret := logrus.New()
 

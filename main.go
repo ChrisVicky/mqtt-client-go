@@ -32,7 +32,7 @@ func main() {
 	// 4. Connect to mqtt broker
 	if token := r.Connect(); token.Wait() && token.Error() != nil {
 		// Fatal Printout the Message & Exit Program with 1
-		logger.Panic(token.Error())
+		logger.Panicf("Connect to mqtt server error: %v", token.Error())
 	}
 
 	// 5. Inform server
@@ -42,4 +42,5 @@ func main() {
 	r.Offline()
 	r.Disconnect(250)
 	logger.Info("Exit Program")
+	// TODO: 如果用户强行终止程序，是否应该发送 Offline
 }

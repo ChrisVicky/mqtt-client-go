@@ -1,6 +1,7 @@
 package client
 
 import (
+	"mqttclient/client/robot"
 	"mqttclient/logger"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
@@ -16,13 +17,6 @@ type MyClient interface {
 	Online()
 	Offline()
 	Running() bool
-
-	subRegistration()
-	loadConfig() error
-	baseApi() string
-
-	// TODO:
-	// ReturnLog()
 }
 
 // TODO: Add Choices of Mode
@@ -41,7 +35,7 @@ func NewClient(address string, config string, t int) MyClient {
 
 	switch t {
 	case ROBOT:
-		r = &Robot{Client: mqtt.NewClient(opt), Config: config}
+		r = robot.NewRobot(opt, config)
 	default:
 		logger.Fatalf("Type %v NOT implemented", t)
 	}
