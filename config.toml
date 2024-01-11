@@ -1,0 +1,15 @@
+# Mqtt Configuration
+
+rconfig = "./client/robot.toml" # Robot Configuration Location
+
+[MQTT]
+address = "127.0.0.1:1883"          # Mqtt Address
+error_file = "mqtt_error.log"       # Error Log file
+critical_file = "mqtt_critical.log" # Criti Log file
+warn_file = "mqtt_warn.log"         # Warn Log file
+debug_file = "mqtt_debug.log"       # Debug Log file
+showlog = false                     # Show mqtt Log : false/true
+
+[LOG]
+level = "TRACE"      # "TRACE", "DEBUG", "INFO", "WARN", "ERROR", "FATAL", "PANIC"
+filename = "app.log" # Log file name
