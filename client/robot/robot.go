@@ -107,6 +107,16 @@ func (r *Robot) pubStart() {
 	tk.Wait()
 }
 
+func (r *Robot) loginfo(str string) {
+	tk := r.Publish(r.baseApi()+"/info", 0, false, str)
+	tk.Wait()
+}
+
+func (r *Robot) logerror(str string) {
+	tk := r.Publish(r.baseApi()+"/error", 0, false, str)
+	tk.Wait()
+}
+
 // Register Subscription
 func (r *Robot) subRegistration() {
 	subscriptions := map[string]func(mqtt.Client, mqtt.Message){
@@ -121,16 +131,15 @@ func (r *Robot) subRegistration() {
 			r.pubStart()
 
 			r.mapBuild()
+
 			// Read map from disk & sent via publish
-			var payload []byte
 			if f, err := os.ReadFile(mapName + ".pgn"); err != nil {
 				// Error Emit
-				payload = []byte(fmt.Sprintf("Wrong: %v", err))
+				r.logerror(fmt.Sprintf("Wrong: %v", err))
 			} else {
-				payload = f
+				// This Do not need to wait
+				r.Publish(r.baseApi()+"/map/png", 0, false, f)
 			}
-			// This Do not need to wait
-			r.Publish(r.baseApi()+"/map/png", 0, false, payload)
 		},
 
 		// [sub] /refresh
@@ -159,11 +168,11 @@ func (r *Robot) subRegistration() {
 }
 
 func (r *Robot) mapGeneration() {
-	r.StartCmd(MAIN_NODE)
-	r.StartCmd(G_MAPPING)
-	r.StartCmd(PS2)
+	r.RunCmdAsync(MAIN_NODE)
+	r.RunCmdAsync(G_MAPPING)
+	r.RunCmdAsync(PS2)
 }
 
 func (r *Robot) mapBuild() {
-	r.StartCmd(BUILD_MAP)
+	r.RunCmd(BUILD_MAP)
 }

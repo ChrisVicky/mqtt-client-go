@@ -28,7 +28,8 @@ type rcm struct {
 	cmdRecords map[cmd.CMDEnum]*exec.Cmd // Cmds Record
 }
 
-func (r *rcm) StartCmd(id cmd.CMDEnum) error {
+// Launch Cmd Async
+func (r *rcm) RunCmdAsync(id cmd.CMDEnum) error {
 	r.cmdsMu.Lock()
 	defer r.cmdsMu.Unlock()
 
@@ -56,6 +57,28 @@ func (r *rcm) StartCmd(id cmd.CMDEnum) error {
 	return nil
 }
 
+// Run Cmd Sync
+func (r *rcm) RunCmd(id cmd.CMDEnum) error {
+	command, ok := cmdMap[id]
+	if !ok {
+		return fmt.Errorf("no command id: %+v", id)
+	}
+
+	cmd := exec.Command(command)
+
+	r.cmdsMu.Lock()
+	r.cmdRecords[id] = cmd
+	r.cmdsMu.Unlock()
+
+	err := cmd.Run()
+
+	r.cmdsMu.Lock()
+	delete(r.cmdRecords, id)
+	r.cmdsMu.Unlock()
+
+	return err
+}
+
 func (r *rcm) StopCmd(id cmd.CMDEnum) (err error) {
 	r.cmdsMu.Lock()
 	defer r.cmdsMu.Unlock()
@@ -77,15 +100,6 @@ func (r *rcm) CleanCmds() {
 }
 
 // Deprecated
-// func (r *Robot) loginfo(str string) {
-// 	tk := r.Publish(r.baseApi()+"/info", 0, false, str)
-// 	tk.Wait()
-// }
-//
-// func (r *Robot) logerror(str string) {
-// 	tk := r.Publish(r.baseApi()+"/error", 0, false, str)
-// 	tk.Wait()
-// }
 //
 // func (r *Robot) run(cmd_str string, uselog bool) {
 // 	cmd := exec.Command(cmd_str)

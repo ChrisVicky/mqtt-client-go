@@ -3,7 +3,8 @@ package cmd
 type CMDEnum int
 
 type CMDManager interface {
-	StartCmd(CMDEnum) error
+	RunCmdAsync(CMDEnum) error
+	RunCmd(CMDEnum) error
 	StopCmd(CMDEnum) error
 	CleanCmds()
 }
