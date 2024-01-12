@@ -1,6 +1,7 @@
 package robot
 
 import (
+	"bufio"
 	"fmt"
 	"mqttclient/client/cmd"
 	"mqttclient/logger"
@@ -38,21 +39,27 @@ func (r *rcm) RunCmdAsync(id cmd.CMDEnum) error {
 		return fmt.Errorf("no command id: %+v", id)
 	}
 
-	cmd := exec.Command(command)
+	cmd := exec.Command("bash", "-c", command)
 	r.cmdRecords[id] = cmd
 
 	// Async
 	go func() {
-		err := cmd.Run()
+		cmd_str := cmd.String()
+		stderr, _ := cmd.StderrPipe()
+		err := cmd.Start()
+		logger.Infof("[Async] %+v:%v Launched", id, cmd_str)
 		if err != nil {
-			logger.Errorf("Error Execution: %v (%+v)\n", err, id)
+			logger.Errorf("%v: %v", err, cmd_str)
 		}
+		scanner := bufio.NewScanner(stderr)
+		for scanner.Scan() {
+			logger.Errorf("[%v] %v", cmd_str, scanner.Text())
+		}
+		logger.Infof("[Async] %+v:%v Finished", id, cmd_str)
 		r.cmdsMu.Lock()
 		delete(r.cmdRecords, id)
 		r.cmdsMu.Unlock()
 	}()
-
-	logger.Infof("Run cmd: %+v:%v", id, command)
 
 	return nil
 }
@@ -64,13 +71,15 @@ func (r *rcm) RunCmd(id cmd.CMDEnum) error {
 		return fmt.Errorf("no command id: %+v", id)
 	}
 
-	cmd := exec.Command(command)
+	cmd := exec.Command("bash", "-c", command)
 
 	r.cmdsMu.Lock()
 	r.cmdRecords[id] = cmd
 	r.cmdsMu.Unlock()
 
+	logger.Infof("[Sync] %+v:%v Run", id, cmd.String())
 	err := cmd.Run()
+	logger.Infof("[Sync] %+v:%v Done", id, cmd.String())
 
 	r.cmdsMu.Lock()
 	delete(r.cmdRecords, id)

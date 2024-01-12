@@ -7,6 +7,8 @@ import (
 	"mqttclient/reply"
 	"os"
 	"os/exec"
+	"sync"
+	"time"
 
 	"github.com/BurntSushi/toml"
 	mqtt "github.com/eclipse/paho.mqtt.golang"
@@ -37,6 +39,7 @@ func NewRobot(opt *mqtt.ClientOptions, fn string) *Robot {
 		Config: fn,
 		CMDManager: &rcm{
 			cmdRecords: make(map[cmd.CMDEnum]*exec.Cmd),
+			cmdsMu:     &sync.Mutex{},
 		},
 	}
 	return r
@@ -133,12 +136,14 @@ func (r *Robot) subRegistration() {
 			r.mapBuild()
 
 			// Read map from disk & sent via publish
-			if f, err := os.ReadFile(mapName + ".pgn"); err != nil {
+			if f, err := os.ReadFile(mapName + ".pgm"); err != nil {
 				// Error Emit
 				r.logerror(fmt.Sprintf("Wrong: %v", err))
+				logger.Infof("Error Reading File: %v, %v", mapName+".pgm", err)
 			} else {
 				// This Do not need to wait
-				r.Publish(r.baseApi()+"/map/png", 0, false, f)
+				logger.Infof("Sending %v to %v", mapName+".pgm", r.baseApi()+"/map/pgm")
+				r.Publish(r.baseApi()+"/map/pgm", 0, false, f)
 			}
 		},
 
@@ -167,10 +172,15 @@ func (r *Robot) subRegistration() {
 	}
 }
 
+func (r *Robot) init() {
+}
+
 func (r *Robot) mapGeneration() {
 	r.RunCmdAsync(MAIN_NODE)
-	r.RunCmdAsync(G_MAPPING)
 	r.RunCmdAsync(PS2)
+	time.Sleep(2 * time.Second)
+
+	r.RunCmdAsync(G_MAPPING)
 }
 
 func (r *Robot) mapBuild() {
