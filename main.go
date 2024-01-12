@@ -27,7 +27,7 @@ func main() {
 	setMqttLog(conf)
 
 	// 3. Setup Client
-	r := client.NewClient(conf.GetMqttAddress(), conf.RConf, client.ROBOT)
+	r := client.NewClient(conf.GetMqttAddress(), conf.CConf, conf.CType)
 
 	// 4. Connect to mqtt broker
 	if token := r.Connect(); token.Wait() && token.Error() != nil {

@@ -1,6 +1,7 @@
 # Mqtt Configuration
 
-rconfig = "./client/robot.toml" # Robot Configuration Location
+ctype = "ROBOT"                 # Client Type: ROBOT, WIFI, SPEAKER
+cconfig = "./client/robot.toml" # Client Configuration File
 
 [MQTT]
 address = "127.0.0.1:1883"          # Mqtt Address

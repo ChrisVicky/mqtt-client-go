@@ -1,14 +1,11 @@
 package client
 
 import (
+	"mqttclient/client/cmd"
 	"mqttclient/client/robot"
 	"mqttclient/logger"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
-)
-
-const (
-	ROBOT = iota
 )
 
 type MyClient interface {
@@ -17,11 +14,15 @@ type MyClient interface {
 	Online()
 	Offline()
 	Running() bool
+
+	cmd.CMDManager
 }
 
-// TODO: Add Choices of Mode
-// NOTE: New a client
-func NewClient(address string, config string, t int) MyClient {
+// New a client
+// address: ip address
+// config: config path
+// t: client type
+func NewClient(address string, config string, t string) MyClient {
 	opt := mqtt.NewClientOptions()
 	opt.AddBroker(address)
 	opt.OnConnect = func(c mqtt.Client) {
@@ -34,7 +35,7 @@ func NewClient(address string, config string, t int) MyClient {
 	var r MyClient
 
 	switch t {
-	case ROBOT:
+	case "ROBOT":
 		r = robot.NewRobot(opt, config)
 	default:
 		logger.Fatalf("Type %v NOT implemented", t)

@@ -10,7 +10,8 @@ import (
 
 type Config struct {
 	FileName string
-	RConf    string `toml:"rconfig"`
+	CConf    string `toml:"cconfig"`
+	CType    string `toml:"ctype"`
 
 	Mqtt MQTT
 	Log  LOG
@@ -90,14 +91,19 @@ func (c *Config) LoadConfig() (err error) {
 		return
 	}
 
-	c.clean()
-
-	return
+	return c.clean()
 }
 
-func (c *Config) clean() {
+func (c *Config) clean() error {
 	c.Mqtt.clean()
 	c.Log.clean()
+
+	switch c.CType {
+	case "ROBOT":
+		return nil
+	default:
+		return fmt.Errorf("unknown type: %v", c.CType)
+	}
 }
 
 func ReadConfigMap(fn string) (m map[string]interface{}, err error) {
