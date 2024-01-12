@@ -3,12 +3,12 @@ package robot
 import (
 	"fmt"
 	"mqttclient/client/cmd"
+	"mqttclient/client/inter"
 	"mqttclient/logger"
 	"mqttclient/reply"
 	"os"
 	"os/exec"
 	"sync"
-	"time"
 
 	"github.com/BurntSushi/toml"
 	mqtt "github.com/eclipse/paho.mqtt.golang"
@@ -19,29 +19,45 @@ const (
 	defaultConfigName = "robot.toml"
 )
 
+const (
+	online inter.InterEnum = iota
+	offline
+	pubStart
+	logInfo
+	logError
+	sendPgm
+)
+
 type Robot struct {
 	mqtt.Client
-
 	cmd.CMDManager
+	inter.MqttInter
 
 	Config     string // Configuration File
 	DeviceId   string `toml:"deviceId"`
 	DeviceType string `toml:"devType"`
 
-	// Stat
-	stat   string // on / off
-	params string
+	stat string // on / off
+
+	// To Implement inter.MqttInter
+	pubInterfaces map[inter.InterEnum]string
+	subInterfaces []string
 }
 
 func NewRobot(opt *mqtt.ClientOptions, fn string) *Robot {
 	r := &Robot{
 		Client: mqtt.NewClient(opt),
 		Config: fn,
+
 		CMDManager: &rcm{
 			cmdRecords: make(map[cmd.CMDEnum]*exec.Cmd),
 			cmdsMu:     &sync.Mutex{},
 		},
+
+		pubInterfaces: make(map[inter.InterEnum]string),
+		subInterfaces: []string{},
 	}
+
 	return r
 }
 
@@ -78,9 +94,41 @@ func (r *Robot) Running() bool {
 	return r.stat == "on"
 }
 
+// Pub Register -- Register Interfaces
+func (r *Robot) PubRegister() {
+	r.pubInterfaces = map[inter.InterEnum]string{
+		online:  "/client/online",
+		offline: "/client/offline",
+
+		pubStart: r.baseApi() + "/start",
+		logInfo:  r.baseApi() + "/info",
+		logError: r.baseApi() + "/error",
+		sendPgm:  r.baseApi() + "/map/pgm",
+	}
+}
+
+func (r *Robot) Pub(id inter.InterEnum, b interface{}) {
+	if add, ok := r.pubInterfaces[id]; ok {
+		tk := r.Publish(add, 1, false, b)
+		tk.Wait()
+		logger.Tracef("%v Published", add)
+	} else {
+		logger.Errorf("Unkown Interface id: %v", id)
+	}
+}
+
+func (r *Robot) PrintRegister() {
+	for _, v := range r.pubInterfaces {
+		logger.Infof("[Pub] %v", v)
+	}
+	for _, v := range r.subInterfaces {
+		logger.Infof("[Sub] %v", v)
+	}
+}
+
 // Online (Called by client end)
 // 1. Load Config
-// 2. Register Subscription
+// 2. Register Sub & Pub Interfaces
 // 3. Change stat & Inform Server
 func (r *Robot) Online() {
 	if err := r.loadConfig(); err != nil {
@@ -89,73 +137,76 @@ func (r *Robot) Online() {
 
 	logger.Info("Config Loaded")
 
-	r.subRegistration()
+	r.SubRegister()
+	r.PubRegister()
+	r.PrintRegister()
 
 	r.stat = "on"
-	tk := r.Publish("/client/online", 1, false, reply.Ok(r.parseInform()))
-	tk.Wait()
+	r.Pub(online, reply.Ok(r.parseInform()))
 }
 
-// Offline (Triggered by both ends)
-// Change stat & Inform Server
 func (r *Robot) Offline() {
 	r.stat = "off"
-	tk := r.Publish("/client/offline", 1, false, reply.Ok(r.parseInform()))
-	tk.Wait()
+	r.Pub(offline, "")
 }
 
-// Shall get called when work starts
 func (r *Robot) pubStart() {
-	tk := r.Publish(r.baseApi()+"/start", 1, false, "")
-	tk.Wait()
+	r.Pub(pubStart, "")
 }
 
-func (r *Robot) loginfo(str string) {
-	tk := r.Publish(r.baseApi()+"/info", 0, false, str)
-	tk.Wait()
+func (r *Robot) logError(str string) {
+	r.Pub(logError, str)
 }
 
-func (r *Robot) logerror(str string) {
-	tk := r.Publish(r.baseApi()+"/error", 0, false, str)
-	tk.Wait()
+func (r *Robot) logInfo(str string) {
+	r.Pub(logInfo, str)
+}
+
+func (r *Robot) sendPgm(payload []byte) {
+	r.Pub(sendPgm, payload)
 }
 
 // Register Subscription
-func (r *Robot) subRegistration() {
+func (r *Robot) SubRegister() {
 	subscriptions := map[string]func(mqtt.Client, mqtt.Message){
-		// [sub] base/map/start
+		// [sub] Init Status
+		r.baseApi() + "/map/config": func(mqtt.Client, mqtt.Message) {
+			go r.init()
+		},
+
+		// [sub] start Map Generation
 		r.baseApi() + "/map/start": func(mqtt.Client, mqtt.Message) {
-			r.pubStart()
-			r.mapGeneration()
+			go r.pubStart()
+			go r.mapGeneration()
 		},
 
-		// [sub] base/map/fetch
+		// [sub] Send Pgm through /map/pgm
 		r.baseApi() + "/map/fetch": func(mqtt.Client, mqtt.Message) {
-			r.pubStart()
-
-			r.mapBuild()
-
-			// Read map from disk & sent via publish
-			if f, err := os.ReadFile(mapName + ".pgm"); err != nil {
-				// Error Emit
-				r.logerror(fmt.Sprintf("Wrong: %v", err))
-				logger.Infof("Error Reading File: %v, %v", mapName+".pgm", err)
-			} else {
-				// This Do not need to wait
-				logger.Infof("Sending %v to %v", mapName+".pgm", r.baseApi()+"/map/pgm")
-				r.Publish(r.baseApi()+"/map/pgm", 0, false, f)
-			}
+			go r.pubStart()
+			go func() {
+				r.mapBuild()
+				// Read map from disk & sent via publish
+				if f, err := os.ReadFile(mapName + ".pgm"); err != nil {
+					// Error Emit
+					r.logError(fmt.Sprintf("Wrong: %v", err))
+					logger.Infof("Error Reading File: %v, %v", mapName+".pgm", err)
+				} else {
+					// This Do not need to wait
+					logger.Infof("Sending %v to %v", mapName+".pgm", r.baseApi()+"/map/pgm")
+					r.sendPgm(f)
+				}
+			}()
 		},
 
-		// [sub] /refresh
+		// [sub] Refresh Cmds (Same as Init)
 		r.baseApi() + "/refresh": func(mqtt.Client, mqtt.Message) {
-			r.CleanCmds()
+			go r.init()
 		},
 
-		// [sub] /bye
+		// [sub] Exit Program
 		r.baseApi() + "/bye": func(mqtt.Client, mqtt.Message) {
-			logger.Warn("Receive Bye, Start Cleaning Cmds")
-			r.CleanCmds()
+			logger.Infof("Receive Bye, Start Cleaning Cmds")
+			go r.CleanCmds()
 			r.stat = "off"
 		},
 
@@ -166,20 +217,20 @@ func (r *Robot) subRegistration() {
 	}
 
 	for k, v := range subscriptions {
-		logger.Infof("Sub: %s", k)
 		tk := r.Subscribe(k, 1, v)
 		tk.Wait()
+		r.subInterfaces = append(r.subInterfaces, k)
 	}
 }
 
 func (r *Robot) init() {
+	logger.Infof("Start Init")
+	r.CleanCmds()
+	r.RunCmdAsync(MAIN_NODE)
+	r.RunCmdAsync(PS2)
 }
 
 func (r *Robot) mapGeneration() {
-	r.RunCmdAsync(MAIN_NODE)
-	r.RunCmdAsync(PS2)
-	time.Sleep(2 * time.Second)
-
 	r.RunCmdAsync(G_MAPPING)
 }
 

@@ -53,7 +53,7 @@ func (r *rcm) RunCmdAsync(id cmd.CMDEnum) error {
 		}
 		scanner := bufio.NewScanner(stderr)
 		for scanner.Scan() {
-			logger.Errorf("[%v] %v", cmd_str, scanner.Text())
+			logger.Tracef("[%v] %v", cmd_str, scanner.Text())
 		}
 		logger.Infof("[Async] %+v:%v Finished", id, cmd_str)
 		r.cmdsMu.Lock()
@@ -100,35 +100,12 @@ func (r *rcm) StopCmd(id cmd.CMDEnum) (err error) {
 }
 
 func (r *rcm) CleanCmds() {
+	logger.Infof("Clean All Cmds Start")
 	for k, v := range r.cmdRecords {
 		logger.Infof("Killing %+v: %v", k, v)
 		if err := r.StopCmd(k); err != nil {
 			logger.Error(err)
 		}
 	}
+	logger.Infof("Clean All Cmds Done")
 }
-
-// Deprecated
-//
-// func (r *Robot) run(cmd_str string, uselog bool) {
-// 	cmd := exec.Command(cmd_str)
-//
-// 	logger.Infof("run cmd: %v", cmd.String())
-//
-// 	var wg sync.WaitGroup
-// 	if uselog {
-// 		stdout, _ := cmd.StdoutPipe()
-// 		wg.Add(1)
-// 		go func() {
-// 			defer wg.Done()
-// 			escanner := bufio.NewScanner(stdout)
-// 			for escanner.Scan() {
-// 				line := escanner.Text()
-// 				r.loginfo(line)
-// 			}
-// 		}()
-// 	}
-//
-// 	cmd.Run()
-// 	wg.Wait()
-// }

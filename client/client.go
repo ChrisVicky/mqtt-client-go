@@ -2,6 +2,7 @@ package client
 
 import (
 	"mqttclient/client/cmd"
+	"mqttclient/client/inter"
 	"mqttclient/client/robot"
 	"mqttclient/logger"
 
@@ -9,24 +10,25 @@ import (
 )
 
 type MyClient interface {
-	mqtt.Client
+	mqtt.Client // Mqtt has Implemented
+
+	cmd.CMDManager  // Customized Cmd Manager
+	inter.MqttInter // CUstomized Mqtt Interfaces Manager
 
 	Online()
 	Offline()
 	Running() bool
-
-	cmd.CMDManager
 }
 
 // New a client
-// address: ip address
+// address: broker ip address
 // config: config path
 // t: client type
 func NewClient(address string, config string, t string) MyClient {
 	opt := mqtt.NewClientOptions()
 	opt.AddBroker(address)
-	opt.OnConnect = func(c mqtt.Client) {
-		logger.Infof("Connected! %v", c.IsConnected())
+	opt.OnConnect = func(mqtt.Client) {
+		logger.Infof("Connected to %v", address)
 	}
 
 	opt.OnConnectionLost = func(c mqtt.Client, err error) {
@@ -34,6 +36,7 @@ func NewClient(address string, config string, t string) MyClient {
 	}
 	var r MyClient
 
+	// TODO: Add New Client Choice HERE
 	switch t {
 	case "ROBOT":
 		r = robot.NewRobot(opt, config)

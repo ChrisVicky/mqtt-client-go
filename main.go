@@ -37,6 +37,8 @@ func main() {
 
 	// 5. Inform server
 	r.Online()
+
+	// 6. Block & Served
 	for r.Running() {
 	}
 	r.Offline()
